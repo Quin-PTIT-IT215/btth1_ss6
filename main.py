@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 app = FastAPI(
     title= 'QUẢN LÝ KHÓA HỌC',
@@ -7,10 +7,10 @@ app = FastAPI(
 )
 
 class CourseSchema(BaseModel):
-    code: str
-    name: str
-    duration: int
-    fee: float
+    code: str 
+    name: str 
+    duration: int = Field(..., gt= 0)
+    fee: float = Field(..., gt=0)
 
 courses = [
     {"id": 1, "code": "PY101", "name": "Python Basic", "duration": 30, "fee": 3000000},
@@ -20,6 +20,13 @@ courses = [
 
 @app.post('/courses', tags=['Courses'], status_code= status.HTTP_201_CREATED)
 def add_course(course: CourseSchema):
+    for item in courses:
+        if item["code"] == course.code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mã khóa học đã tồn tại"
+            )
+        
     course_id = len(courses) + 1
     new_course = {
         'id': course_id,
@@ -31,18 +38,39 @@ def add_course(course: CourseSchema):
 
     courses.append(new_course)
     return {
-        'status_code': 201,
         'message': 'Thêm khóa học thành công',
-        'data': courses
+        'data': new_course
     }
 
 
-@app.get('/courses', tags=['Scourses'], summary= 'Lấy danh sách khóa học')
-def get_all_courses():
+@app.get('/courses', tags=['Courses'], summary= 'Lấy danh sách khóa học')
+def get_all_courses(
+    keyword: str = None,
+    min_fee: float = None,
+    max_fee: float = None ):
+
+    result = []
+    for course in courses:
+        if keyword:
+            if keyword.lower() not in course["name"].lower() and \
+                keyword.lower() not in course["code"].lower():
+                continue
+
+           
+        if min_fee is not None:
+            if course["fee"] < min_fee:
+                continue
+
+           
+        if max_fee is not None:
+            if course["fee"] > max_fee:
+                continue
+
+        result.append(course)
+
     return {
-        'status_code': 200,
         'message': 'Lấy khóa học thành công',
-        'data': courses
+        'data': result
     }
 
 
@@ -51,7 +79,6 @@ def get_detail_course(course_id: int):
     for course in courses:
         if course.get('id') == course_id:
             return {
-                'status_code': 200,
                 'message': 'Lấy khóa học thành công',
                 'data': course
             }
@@ -62,8 +89,15 @@ def get_detail_course(course_id: int):
     )
 
 
-@app.put("/courses/{course_id}", tags=['Courses'], summary= 'Cập nhật khóa học', status_code= 202)
+@app.put("/courses/{course_id}", tags=['Courses'], summary= 'Cập nhật khóa học', status_code= status.HTTP_200_OK)
 def update_courses(course_id: int, update_course : CourseSchema):
+    for item in courses:
+        if item["code"] == update_course.code and item["id"] != course_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mã khóa học đã tồn tại"
+            )
+        
     for course in courses:
         if course.get('id') == course_id:
             course['code'] = update_course.code
@@ -72,7 +106,6 @@ def update_courses(course_id: int, update_course : CourseSchema):
             course['fee'] = update_course.fee
 
             return {
-                'status_code': 202,
                 'message': 'Cập nhật khóa học thành công',
                 'data': course
             }
@@ -88,7 +121,6 @@ def delete_course(course_id: int):
         if course_id == course.get('id'):
             courses.remove(course)
             return {
-                'status_code': 200,
                 'message': 'Xóa khóa học thành công',
                 'data': course
             }
@@ -97,3 +129,5 @@ def delete_course(course_id: int):
         status_code= 404,
         detail= 'Không tìm thấy khóa học'
     )
+
+
